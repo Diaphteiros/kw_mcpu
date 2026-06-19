@@ -26,9 +26,14 @@ func projectSelectorPreview(project *pwv1alpha1.Project, _, _ int) string {
 		fmt.Fprintf(&sb, "Created By: %s\n", creator)
 	}
 
-	sb.WriteString("\nMembers:\n")
-	for _, member := range project.Spec.Members {
-		fmt.Fprintf(&sb, "- %s\n", projectMemberToString(member))
+	sb.WriteString("\nMembers:")
+	if len(project.Spec.Members) == 0 {
+		sb.WriteString(" none (or unknown)\n")
+	} else {
+		sb.WriteString("\n")
+		for _, member := range project.Spec.Members {
+			fmt.Fprintf(&sb, "- %s\n", projectMemberToString(member))
+		}
 	}
 	return sb.String()
 }
@@ -69,7 +74,7 @@ func projectMemberSubjectToString(subject pwv1alpha1.Subject) string {
 
 // WORKSPACE
 
-func workspaceSelectorPreview(workspace pwv1alpha1.Workspace, _, _ int) string {
+func workspaceSelectorPreview(workspace *pwv1alpha1.Workspace, _, _ int) string {
 	sb := strings.Builder{}
 	fmt.Fprintf(&sb, "Name: %s\n", workspace.Name)
 
@@ -83,9 +88,14 @@ func workspaceSelectorPreview(workspace pwv1alpha1.Workspace, _, _ int) string {
 		fmt.Fprintf(&sb, "Created By: %s\n", creator)
 	}
 
-	sb.WriteString("\nMembers:\n")
-	for _, member := range workspace.Spec.Members {
-		fmt.Fprintf(&sb, "- %s\n", workspaceMemberToString(member))
+	sb.WriteString("\nMembers:")
+	if len(workspace.Spec.Members) == 0 {
+		sb.WriteString(" none (or unknown)\n")
+	} else {
+		sb.WriteString("\n")
+		for _, member := range workspace.Spec.Members {
+			fmt.Fprintf(&sb, "- %s\n", workspaceMemberToString(member))
+		}
 	}
 	return sb.String()
 }

@@ -16,9 +16,9 @@ func init() {
 	req = libutils.NewRequirements()
 
 	// This is just for generating the help message, flag parsing needs to be done manually and happens in parseArgs.
-	TargetCmd.Flags().StringVarP(&landscapeArg, "landscape", "l", "", "The MCP landscape to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.")
-	TargetCmd.Flags().StringVarP(&projectArg, "project", "p", "", "The MCP project to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.")
-	TargetCmd.Flags().StringVarP(&workspaceArg, "workspace", "w", "", "The MCP workspace to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.")
+	TargetCmd.Flags().StringVarP(&landscapeArg, "landscape", "l", "", "The openMCP landscape to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.")
+	TargetCmd.Flags().StringVarP(&projectArg, "project", "p", "", "The openMCP project to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.")
+	TargetCmd.Flags().StringVarP(&workspaceArg, "workspace", "w", "", "The openMCP workspace to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.")
 	TargetCmd.Flags().StringVarP(&cpArg, "controlplane", "c", "", "The ControlPlane cluster to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.")
 }
 

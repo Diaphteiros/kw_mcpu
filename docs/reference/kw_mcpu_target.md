@@ -51,9 +51,9 @@ kw_mcpu target [flags]
 ```
   -c, --controlplane string   The ControlPlane cluster to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.
   -h, --help                  help for target
-  -l, --landscape string      The MCP landscape to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.
-  -p, --project string        The MCP project to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.
-  -w, --workspace string      The MCP workspace to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.
+  -l, --landscape string      The openMCP landscape to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.
+  -p, --project string        The openMCP project to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.
+  -w, --workspace string      The openMCP workspace to target. Will be prompted for if specified without an argument. Might be recovered from state, if not specified.
 ```
 
 ### SEE ALSO

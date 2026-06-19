@@ -144,6 +144,7 @@ Examples:
 		// has to happen here due to required context
 		req.Register(reqLandscape, satisfyLandscapeRequirement(cfg))
 		req.Register(reqOnboardingCluster, satisfyOnboardingClusterRequirement(con, cfg))
+		req.Register(reqNamespaces, satisfyNamespacesRequirement(cmd))
 		req.Register(reqProject, satisfyProjectRequirement(cmd))
 		req.Register(reqWorkspace, satisfyWorkspaceRequirement(cmd))
 		req.Register(reqControlPlane, satisfyControlPlaneRequirement(cmd))
@@ -216,12 +217,50 @@ Examples:
 // callState is used to store information during internal calls to other plugins
 type callState struct {
 	LandscapeName           string                `json:"landscapeName,omitempty"`
+	AccessibleNamespaces    AccessibleNamespaces  `json:"accessibleNamespaces,omitempty"`
 	Project                 *pwv1alpha1.Project   `json:"project,omitempty"`
 	Workspace               *pwv1alpha1.Workspace `json:"workspace,omitempty"`
 	ControlPlane            *mcpv2.ControlPlane   `json:"controlPlane,omitempty"`
 	CurrentState            *state.MCPState       `json:"currentState,omitempty"`  // holds the current state of the plugin
 	OriginalState           *state.MCPState       `json:"originalState,omitempty"` // holds the state of the plugin when the command was called
 	OriginalStateKubeconfig []byte                `json:"originalStateKubeconfig,omitempty"`
+}
+
+type AccessibleNamespaces []AccessibleNamespace
+
+type AccessibleNamespace struct {
+	Name      string `json:"name"`
+	Project   string `json:"project,omitempty"`
+	Workspace string `json:"workspace,omitempty"`
+}
+
+// Projects returns a mapping from project names to their corresponding namespaces.
+// If directlyAccessibleOnly is true, only projects where their namespace is accessible are returned.
+// Otherwise, also projects which contain an accessible Workspace are returned, but their namespaces are not known and the corresponding values in the returned map will be empty strings.
+func (ans AccessibleNamespaces) Projects(directlyAccessibleOnly bool) map[string]string {
+	res := map[string]string{}
+	for _, an := range ans {
+		if an.Project != "" {
+			if an.Workspace == "" {
+				res[an.Project] = an.Name
+			} else if _, ok := res[an.Project]; !ok && !directlyAccessibleOnly {
+				res[an.Project] = ""
+			}
+		}
+	}
+	return res
+}
+
+// Workspaces returns a mapping from workspace names to their corresponding namespaces.
+// If project is not empty, only workspaces belonging to the specified project are returned.
+func (ans AccessibleNamespaces) Workspaces(project string) map[string]string {
+	res := map[string]string{}
+	for _, an := range ans {
+		if an.Workspace != "" && (project == "" || an.Project == project) {
+			res[an.Workspace] = an.Name
+		}
+	}
+	return res
 }
 
 // withDefaultNamespace takes a kubeconfig as bytes and returns the modified kubeconfig with the default namespace set to the given namespace.

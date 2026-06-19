@@ -7,11 +7,12 @@ import (
 	"strings"
 
 	authzv1 "k8s.io/api/authorization/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openmcp-project/controller-utils/pkg/clusters"
 	mcpv2 "github.com/openmcp-project/openmcp-operator/api/core/v2alpha1"
@@ -34,6 +35,12 @@ const (
 	reqWorkspace         = "workspace"
 	reqControlPlane      = "controlPlane"
 	reqOnboardingCluster = "onboardingCluster"
+	reqNamespaces        = "namespaces"
+
+	// hard-coding here to avoid dependency towards platform service project-workspace
+	// (unfortunately, the labels are not defined in the API packages)
+	ProjectLabel   = pwv1alpha1.GroupName + "/project"
+	WorkspaceLabel = pwv1alpha1.GroupName + "/workspace"
 )
 
 // This file provides satisfyer methods for the requirements logic from the utils library.
@@ -134,14 +141,71 @@ func satisfyOnboardingClusterRequirement(con *libcontext.Context, cfg *config.MC
 	}
 }
 
+// namespaces requirement
+// If satisfied, cs.AccessibleNamespaces can be expected to be set.
+func satisfyNamespacesRequirement(cmd *cobra.Command) func() error {
+	return func() error {
+		debug.Debug("Satisfying requirement '%s'", reqNamespaces)
+		if err := handlePrerequisites(reqNamespaces, reqOnboardingCluster); err != nil {
+			return err
+		}
+		debug.Debug("Listing accessible namespaces")
+		// end-users can only access namespaces belonging to their projects and workspaces
+		ssrr := &authzv1.SelfSubjectRulesReview{
+			Spec: authzv1.SelfSubjectRulesReviewSpec{
+				Namespace: "*",
+			},
+		}
+		ssrr.SetName("onboarding") // we can set any name here, as it is not used by the API
+		if err := onboardingCluster.Client().Create(cmd.Context(), ssrr); err != nil {
+			return fmt.Errorf("error creating SelfSubjectRulesReview in onboarding cluster: %w", err)
+		}
+		nsNames := sets.New[string]()
+		for _, rule := range ssrr.Status.ResourceRules {
+			// search for namespaces where the user has access
+			if slices.Contains(rule.APIGroups, corev1.GroupName) && slices.Contains(rule.Resources, "namespaces") && slices.Contains(rule.Verbs, "get") {
+				for _, rn := range rule.ResourceNames {
+					nsNames.Insert(rn)
+				}
+			}
+		}
+
+		// fetch all namespaces for more information
+		for nsName := range nsNames {
+			ns := &corev1.Namespace{}
+			if err := onboardingCluster.Client().Get(cmd.Context(), client.ObjectKey{Name: nsName}, ns); err != nil {
+				return fmt.Errorf("error fetching namespace '%s': %w", nsName, err)
+			}
+			an := AccessibleNamespace{
+				Name: ns.Name,
+			}
+			if project, ok := ns.Labels[ProjectLabel]; ok {
+				an.Project = project
+			}
+			if workspace, ok := ns.Labels[WorkspaceLabel]; ok {
+				an.Workspace = workspace
+			}
+			cs.AccessibleNamespaces = append(cs.AccessibleNamespaces, an)
+		}
+
+		// log accessible namespaces for debugging purposes
+		anYaml, err := yaml.Marshal(cs.AccessibleNamespaces)
+		if err != nil {
+			debug.Debug("unable to marshal accessible namespaces to yaml: %v", err)
+		} else {
+			debug.Debug("Accessible namespaces:\n%s", string(anYaml))
+		}
+
+		return nil
+	}
+}
+
 // project requirement
 // If satisfied, cs.Project can be expected to be set.
+// Note that some projects might not be accessible directly, resulting in their resource being a mock with only the name set.
 func satisfyProjectRequirement(cmd *cobra.Command) func() error {
 	return func() error {
 		debug.Debug("Satisfying requirement '%s'", reqProject)
-		if err := handlePrerequisites(reqProject, reqOnboardingCluster); err != nil {
-			return err
-		}
 		projectName := ""
 		if projectArg != PromptForArg {
 			// option 1: project name is provided via argument or can be recovered from state
@@ -158,6 +222,9 @@ func satisfyProjectRequirement(cmd *cobra.Command) func() error {
 			}
 			if projectName != "" {
 				debug.Debug("Fetching project '%s'", projectName)
+				if err := handlePrerequisites(reqProject, reqOnboardingCluster); err != nil {
+					return err
+				}
 				project := &pwv1alpha1.Project{}
 				project.Name = projectName
 				if err := onboardingCluster.Client().Get(cmd.Context(), client.ObjectKeyFromObject(project), project); err != nil {
@@ -167,39 +234,30 @@ func satisfyProjectRequirement(cmd *cobra.Command) func() error {
 			}
 		} else {
 			// option 2: prompt requested for project name, this will fetch the project as a side-effect
-			debug.Debug("Listing projects")
-			// end-users can only access their own projects and not list all projects, so we need to do this via a SelfSubjectRulesReview to find out which projects the user has access to
-			ssrr := &authzv1.SelfSubjectRulesReview{
-				Spec: authzv1.SelfSubjectRulesReviewSpec{
-					Namespace: "*",
-				},
+			if err := handlePrerequisites(reqProject, reqOnboardingCluster, reqNamespaces); err != nil {
+				return err
 			}
-			ssrr.SetName("onboarding") // we can set any name here, as it is not used by the API
-			if err := onboardingCluster.Client().Create(cmd.Context(), ssrr); err != nil {
-				return fmt.Errorf("error creating SelfSubjectRulesReview in onboarding cluster: %w", err)
+			directlyAccessibleProjectsOnly := false
+			logMod := ""
+			if workspaceArg == "" && cpArg == "" {
+				// This command seems to target a project directly (instead of a workspace or controlplane),
+				// so let's only show projects that are actually accessible by the user.
+				directlyAccessibleProjectsOnly = true
+				logMod = " (directly accessible only)"
 			}
-			projectNames := sets.New[string]()
-			for _, rule := range ssrr.Status.ResourceRules {
-				// search for projects where the user has access
-				if slices.Contains(rule.APIGroups, pwv1alpha1.GroupName) && slices.Contains(rule.Resources, "projects") && slices.Contains(rule.Verbs, "get") {
-					for _, rn := range rule.ResourceNames {
-						projectNames.Insert(rn)
+			debug.Debug("Fetching accessible projects%s", logMod)
+			projects := []*pwv1alpha1.Project{}
+			for prName, prNamespace := range cs.AccessibleNamespaces.Projects(directlyAccessibleProjectsOnly) {
+				p := &pwv1alpha1.Project{}
+				p.Name = prName
+				p.Status.Namespace = prNamespace
+				// try to fetch accessible projects
+				if prNamespace != "" {
+					if err := onboardingCluster.Client().Get(cmd.Context(), client.ObjectKeyFromObject(p), p); err != nil {
+						debug.Debug("Unable to fetch project '%s/%s': %v", prNamespace, prName, err)
 					}
 				}
-			}
-
-			// fetch each project to get more information
-			projects := make([]*pwv1alpha1.Project, 0, projectNames.Len())
-			for projectName := range projectNames {
-				cur := &pwv1alpha1.Project{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: projectName,
-					},
-				}
-				if err := onboardingCluster.Client().Get(cmd.Context(), client.ObjectKeyFromObject(cur), cur); err != nil {
-					return fmt.Errorf("error fetching project '%s': %w", cur.Name, err)
-				}
-				projects = append(projects, cur)
+				projects = append(projects, p)
 			}
 
 			debug.Debug("Prompting for project name.")
@@ -217,8 +275,6 @@ func satisfyProjectRequirement(cmd *cobra.Command) func() error {
 		}
 		if cs.Project == nil {
 			return fmt.Errorf("unable to identify project, specify its name via the '--project' flag")
-		} else if cs.Project.Status.Namespace == "" {
-			return fmt.Errorf("project '%s' does not have a namespace assigned", cs.Project.Name)
 		}
 
 		return nil
@@ -230,7 +286,7 @@ func satisfyProjectRequirement(cmd *cobra.Command) func() error {
 func satisfyWorkspaceRequirement(cmd *cobra.Command) func() error {
 	return func() error {
 		debug.Debug("Satisfying requirement '%s'", reqWorkspace)
-		if err := handlePrerequisites(reqWorkspace, reqOnboardingCluster, reqProject); err != nil {
+		if err := handlePrerequisites(reqWorkspace, reqProject); err != nil {
 			return err
 		}
 		wsName := ""
@@ -249,6 +305,9 @@ func satisfyWorkspaceRequirement(cmd *cobra.Command) func() error {
 			}
 			if wsName != "" {
 				debug.Debug("Fetching workspace '%s/%s'", cs.Project.Status.Namespace, wsName)
+				if err := handlePrerequisites(reqWorkspace, reqOnboardingCluster); err != nil {
+					return err
+				}
 				workspace := &pwv1alpha1.Workspace{}
 				workspace.Name = wsName
 				workspace.Namespace = cs.Project.Status.Namespace
@@ -259,23 +318,38 @@ func satisfyWorkspaceRequirement(cmd *cobra.Command) func() error {
 			}
 		} else {
 			// option 2: prompt requested for workspace name, this will fetch the workspace as a side-effect
-			debug.Debug("Listing workspaces in namespace '%s'", cs.Project.Status.Namespace)
-			wsList := &pwv1alpha1.WorkspaceList{}
-			if err := onboardingCluster.Client().List(cmd.Context(), wsList, client.InNamespace(cs.Project.Status.Namespace)); err != nil {
-				return fmt.Errorf("unable to list workspaces in namespace '%s' on onboarding cluster: %w", cs.Project.Status.Namespace, err)
+			if err := handlePrerequisites(reqWorkspace, reqOnboardingCluster, reqNamespaces); err != nil {
+				return err
+			}
+			debug.Debug("Fetching accessible workspaces")
+			workspaces := []*pwv1alpha1.Workspace{}
+			for wsName, wsNamespace := range cs.AccessibleNamespaces.Workspaces(cs.Project.Name) {
+				w := &pwv1alpha1.Workspace{}
+				w.Name = wsName
+				if cs.Project.Status.Namespace != "" {
+					w.Namespace = cs.Project.Status.Namespace
+					// try to fetch workspaces for further information
+					if err := onboardingCluster.Client().Get(cmd.Context(), client.ObjectKeyFromObject(w), w); err != nil {
+						debug.Debug("Unable to fetch workspace '%s/%s': %v", wsNamespace, wsName, err)
+					}
+				}
+				if w.Status.Namespace == "" {
+					w.Status.Namespace = wsNamespace
+				}
+				workspaces = append(workspaces, w)
 			}
 
 			debug.Debug("Prompting for workspace name.")
 			// select workspace
-			_, workspace, _ := selector.New[pwv1alpha1.Workspace]().
+			_, workspace, _ := selector.New[*pwv1alpha1.Workspace]().
 				WithPrompt("Select workspace: ").
 				WithFatalOnAbort("No workspace selected.").
 				WithFatalOnError("error selecting workspace: %w").
 				WithPreview(workspaceSelectorPreview).
 				WithSortByKey(selector.Invert).
-				From(wsList.Items, func(elem pwv1alpha1.Workspace) string { return elem.Name }).
+				From(workspaces, func(elem *pwv1alpha1.Workspace) string { return elem.Name }).
 				Select()
-			cs.Workspace = &workspace
+			cs.Workspace = workspace
 			debug.Debug("Selected Workspace: %s", cs.Workspace.Name)
 		}
 		if cs.Workspace == nil {
