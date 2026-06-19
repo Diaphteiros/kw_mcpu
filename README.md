@@ -1,4 +1,4 @@
-# KubeSwitcher Plugin: MCP
+# KubeSwitcher Plugin: MCPU
 
 > [!IMPORTANT]
 > This project is still work in progress and some errors as well as missing documentation are to be expected!
