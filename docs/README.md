@@ -4,6 +4,6 @@
 ## Command Reference
 
 - [kw_mcpu](reference/kw_mcpu.md)
-- [kw_mcpu target](reference/kw_mcp_target.md)
-- [kw_mcpu version](reference/kw_mcp_version.md)
+- [kw_mcpu target](reference/kw_mcpu_target.md)
+- [kw_mcpu version](reference/kw_mcpu_version.md)
 

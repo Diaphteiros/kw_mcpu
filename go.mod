@@ -3,15 +3,9 @@ module github.com/Diaphteiros/kw_mcpu
 go 1.26.4
 
 require (
-	github.com/Diaphteiros/kw v1.0.2-0.20260320143720-aa4fa095d11d
 	github.com/Diaphteiros/kw/pluginlib v1.1.4
-	github.com/Diaphteiros/kw_garden v1.0.0
-	github.com/Diaphteiros/kw_kind v1.0.0
-	github.com/mandelsoft/vfs v0.4.4
 	github.com/openmcp-project/controller-utils v0.29.0
-	github.com/openmcp-project/mcp-operator/api v0.52.1-0.20260311142900-1160ddd5f695
 	github.com/openmcp-project/openmcp-operator/api v1.0.1
-	github.com/openmcp-project/openmcp-operator/lib v0.18.1
 	github.com/openmcp-project/project-workspace-operator/api v1.3.0
 	github.com/spf13/cobra v1.10.2
 	k8s.io/api v0.36.1
@@ -24,7 +18,6 @@ require (
 require github.com/spf13/pflag v1.0.10 // indirect
 
 require (
-	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
@@ -38,7 +31,6 @@ require (
 	github.com/fluxcd/source-controller/api v1.8.5 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
-	github.com/gardener/gardener/pkg/apis v0.0.0-20260220150651-d6effc0a1157 // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/gdamore/tcell/v2 v2.6.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -64,6 +56,7 @@ require (
 	github.com/ktr0731/go-fuzzyfinder v0.9.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mandelsoft/filepath v0.0.0-20240223090642-3e2777258aa3 // indirect
+	github.com/mandelsoft/vfs v0.4.4 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
@@ -91,6 +84,7 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/apiextensions-apiserver v0.36.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260512234627-ef417d054102 // indirect

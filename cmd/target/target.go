@@ -143,6 +143,7 @@ Examples:
 		// setup requirements
 		// has to happen here due to required context
 		req.Register(reqLandscape, satisfyLandscapeRequirement(cfg))
+		req.Register(reqOnboardingCluster, satisfyOnboardingClusterRequirement(con, cfg))
 		req.Register(reqProject, satisfyProjectRequirement(cmd))
 		req.Register(reqWorkspace, satisfyWorkspaceRequirement(cmd))
 		req.Register(reqControlPlane, satisfyControlPlaneRequirement(cmd))
@@ -230,16 +231,16 @@ func withDefaultNamespace(original []byte, namespace string) ([]byte, error) {
 
 	kcfg, err := libutils.ParseKubeconfig(original)
 	if err != nil {
-		libutils.Fatal(1, "error parsing kubeconfig: %w\n", err)
+		return nil, fmt.Errorf("error parsing kubeconfig: %w", err)
 	}
 	curCtx, ok := kcfg.Contexts[kcfg.CurrentContext]
 	if !ok {
-		libutils.Fatal(1, "invalid kubeconfig: current context '%s' not found\n", kcfg.CurrentContext)
+		return nil, fmt.Errorf("invalid kubeconfig: current context '%s' not found", kcfg.CurrentContext)
 	}
 	curCtx.Namespace = namespace
 	kcfgData, err := clientcmd.Write(*kcfg)
 	if err != nil {
-		libutils.Fatal(1, "error marshalling kubeconfig: %w\n", err)
+		return nil, fmt.Errorf("error marshalling kubeconfig: %w", err)
 	}
 	return kcfgData, nil
 }
