@@ -1,0 +1,19 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write # we need this to be able to push tags
+  pull-requests: read
+
+jobs:
+  release_tag:
+    uses: openmcp-project/build/.github/workflows/release.lib.yaml@main
+    with:
+      app_id: ${{ vars.CI_APP_ID }}
+      is_cli: true
+    secrets:
+      app_private_key: ${{ secrets.CI_APP_KEY }}

@@ -1,0 +1,16 @@
+name: Homebrew Releaser
+
+on:
+  release:
+    types:
+    - published
+
+jobs:
+  homebrew:
+    uses: openmcp-project/build/.github/workflows/homebrew.lib.yaml@main
+    with:
+      username: Diaphteiros
+      tap: homebrew-kubeswitcher
+      readme_table: true
+    secrets:
+      token: ${{ secrets.HOMEBREW_KUBESWITCHER_TOKEN }}
