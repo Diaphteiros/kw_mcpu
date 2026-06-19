@@ -260,52 +260,22 @@ func satisfyWorkspaceRequirement(cmd *cobra.Command) func() error {
 		} else {
 			// option 2: prompt requested for workspace name, this will fetch the workspace as a side-effect
 			debug.Debug("Listing workspaces in namespace '%s'", cs.Project.Status.Namespace)
-			// users might not be able to list all workspaces in the project, so let's use a SelfSubjectRulesReview to find out which workspaces the user has access to
-			ssrr := &authzv1.SelfSubjectRulesReview{
-				Spec: authzv1.SelfSubjectRulesReviewSpec{
-					Namespace: cs.Project.Status.Namespace,
-				},
-			}
-			ssrr.SetName("onboarding") // we can set any name here, as it is not used by the API
-			if err := onboardingCluster.Client().Create(cmd.Context(), ssrr); err != nil {
-				return fmt.Errorf("error creating SelfSubjectRulesReview in onboarding cluster: %w", err)
-			}
-			wsNames := sets.New[string]()
-			for _, rule := range ssrr.Status.ResourceRules {
-				// search for workspaces where the user has access
-				if slices.Contains(rule.APIGroups, pwv1alpha1.GroupName) && slices.Contains(rule.Resources, "workspaces") && slices.Contains(rule.Verbs, "get") {
-					for _, rn := range rule.ResourceNames {
-						wsNames.Insert(rn)
-					}
-				}
-			}
-
-			// fetch each workspace to get more information
-			workspaces := make([]*pwv1alpha1.Workspace, 0, wsNames.Len())
-			for wsName := range wsNames {
-				cur := &pwv1alpha1.Workspace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      wsName,
-						Namespace: cs.Project.Status.Namespace,
-					},
-				}
-				if err := onboardingCluster.Client().Get(cmd.Context(), client.ObjectKeyFromObject(cur), cur); err != nil {
-					return fmt.Errorf("error fetching workspace '%s/%s': %v", cur.Namespace, cur.Name, err)
-				}
-				workspaces = append(workspaces, cur)
+			wsList := &pwv1alpha1.WorkspaceList{}
+			if err := onboardingCluster.Client().List(cmd.Context(), wsList, client.InNamespace(cs.Project.Status.Namespace)); err != nil {
+				return fmt.Errorf("unable to list workspaces in namespace '%s' on onboarding cluster: %w", cs.Project.Status.Namespace, err)
 			}
 
 			debug.Debug("Prompting for workspace name.")
 			// select workspace
-			_, workspace, _ := selector.New[*pwv1alpha1.Workspace]().
+			_, workspace, _ := selector.New[pwv1alpha1.Workspace]().
 				WithPrompt("Select workspace: ").
 				WithFatalOnAbort("No workspace selected.").
 				WithFatalOnError("error selecting workspace: %w").
 				WithPreview(workspaceSelectorPreview).
 				WithSortByKey(selector.Invert).
-				From(workspaces, func(elem *pwv1alpha1.Workspace) string { return elem.Name }).
+				From(wsList.Items, func(elem pwv1alpha1.Workspace) string { return elem.Name }).
 				Select()
-			cs.Workspace = workspace
+			cs.Workspace = &workspace
 			debug.Debug("Selected Workspace: %s", cs.Workspace.Name)
 		}
 		if cs.Workspace == nil {

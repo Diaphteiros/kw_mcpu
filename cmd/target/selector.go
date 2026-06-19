@@ -69,7 +69,7 @@ func projectMemberSubjectToString(subject pwv1alpha1.Subject) string {
 
 // WORKSPACE
 
-func workspaceSelectorPreview(workspace *pwv1alpha1.Workspace, _, _ int) string {
+func workspaceSelectorPreview(workspace pwv1alpha1.Workspace, _, _ int) string {
 	sb := strings.Builder{}
 	fmt.Fprintf(&sb, "Name: %s\n", workspace.Name)
 
