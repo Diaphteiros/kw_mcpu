@@ -23,6 +23,16 @@ task install
 > [!NOTE]
 > This project uses [task](https://taskfile.dev/) instead of `make`.
 
+## Usage Examples
+
+- `kw mcpu target -l dev -p my-project -w my-workspace -c test`
+  - Targets the cluster belonging to the `ControlPlane` `test`, in the workspace `my-workspace`, in the project `my-project`, on the landscape named `dev` (landscape names are defined in the configuration).
+- `kw mcpu target -w foo`
+  - Targets the onboarding cluster, with the default namespace set to the namespace belonging to the `Workspace` `foo`.
+  - This only works if landscape and project were already set by a previous `kw mcpu target` command and no other `kw` command was used in between to change the kubeconfig target. Otherwise, landscape and project would need to be specified explicitly.
+- `kw mcpu target -l -p -w -c`
+  - Targets a `ControlPlane` cluster. Prompts the user to interactively select landscape, project, workspace and controlplane from a given list.
+
 ## Configuration
 
 The plugin takes a small configuration in the kubeswitcher config. The configuration is required for the plugin to work properly.
