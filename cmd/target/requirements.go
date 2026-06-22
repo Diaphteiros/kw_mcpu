@@ -209,7 +209,6 @@ func satisfyProjectRequirement(cmd *cobra.Command) func() error {
 		projectName := ""
 		if projectArg != PromptForArg {
 			// option 1: project name is provided via argument or can be recovered from state
-			// => fetch corresponding project
 			if projectArg != "" {
 				projectName = projectArg
 			} else if landscapeArg == "" {
@@ -221,16 +220,24 @@ func satisfyProjectRequirement(cmd *cobra.Command) func() error {
 				}
 			}
 			if projectName != "" {
-				debug.Debug("Fetching project '%s'", projectName)
-				if err := handlePrerequisites(reqProject, reqOnboardingCluster); err != nil {
-					return err
+				if workspaceArg == "" && cpArg == "" {
+					// The project is targeted directly, so we can fetch it (user needs permission to do so anyway to target it)
+					debug.Debug("Fetching project '%s'", projectName)
+					if err := handlePrerequisites(reqProject, reqOnboardingCluster); err != nil {
+						return err
+					}
+					project := &pwv1alpha1.Project{}
+					project.Name = projectName
+					if err := onboardingCluster.Client().Get(cmd.Context(), client.ObjectKeyFromObject(project), project); err != nil {
+						return fmt.Errorf("unable to get project '%s' on onboarding cluster: %w", project.Name, err)
+					}
+					cs.Project = project
+				} else {
+					// The project is not the primary target of the command, so we don't need anything except for the project name, which we have - let's just mock the project resource
+					debug.Debug("Mocking project, as just its name is required")
+					cs.Project = &pwv1alpha1.Project{}
+					cs.Project.Name = projectName
 				}
-				project := &pwv1alpha1.Project{}
-				project.Name = projectName
-				if err := onboardingCluster.Client().Get(cmd.Context(), client.ObjectKeyFromObject(project), project); err != nil {
-					return fmt.Errorf("unable to get project '%s' on onboarding cluster: %w", project.Name, err)
-				}
-				cs.Project = project
 			}
 		} else {
 			// option 2: prompt requested for project name, this will fetch the project as a side-effect
@@ -277,6 +284,11 @@ func satisfyProjectRequirement(cmd *cobra.Command) func() error {
 			return fmt.Errorf("unable to identify project, specify its name via the '--project' flag")
 		}
 
+		nsMod := "<unknown>"
+		if cs.Project.Status.Namespace != "" {
+			nsMod = cs.Project.Status.Namespace
+		}
+		debug.Debug("Project: %s (namespace: %s)", cs.Project.Name, nsMod)
 		return nil
 	}
 }
@@ -286,13 +298,12 @@ func satisfyProjectRequirement(cmd *cobra.Command) func() error {
 func satisfyWorkspaceRequirement(cmd *cobra.Command) func() error {
 	return func() error {
 		debug.Debug("Satisfying requirement '%s'", reqWorkspace)
-		if err := handlePrerequisites(reqWorkspace, reqProject); err != nil {
+		if err := handlePrerequisites(reqWorkspace, reqProject, reqNamespaces); err != nil {
 			return err
 		}
 		wsName := ""
 		if workspaceArg != PromptForArg {
 			// option 1: workspace name is provided via argument or can be recovered from state
-			// => fetch corresponding workspace
 			if workspaceArg != "" {
 				wsName = workspaceArg
 			} else if landscapeArg == "" && projectArg == "" {
@@ -304,21 +315,24 @@ func satisfyWorkspaceRequirement(cmd *cobra.Command) func() error {
 				}
 			}
 			if wsName != "" {
-				debug.Debug("Fetching workspace '%s/%s'", cs.Project.Status.Namespace, wsName)
-				if err := handlePrerequisites(reqWorkspace, reqOnboardingCluster); err != nil {
-					return err
-				}
+				debug.Debug("Searching for accessible namespace with project '%s' and workspace '%s' to identify workspace namespace", cs.Project.Name, wsName)
 				workspace := &pwv1alpha1.Workspace{}
 				workspace.Name = wsName
-				workspace.Namespace = cs.Project.Status.Namespace
-				if err := onboardingCluster.Client().Get(cmd.Context(), client.ObjectKeyFromObject(workspace), workspace); err != nil {
-					return fmt.Errorf("unable to get workspace '%s' on onboarding cluster: %w", workspace.Name, err)
+				for _, an := range cs.AccessibleNamespaces {
+					if an.Workspace == wsName && an.Project == cs.Project.Name {
+						workspace.Status.Namespace = an.Name
+						debug.Debug("Identified workspace namespace '%s' via permissions", workspace.Status.Namespace)
+						break
+					}
+				}
+				if workspace.Status.Namespace == "" {
+					return fmt.Errorf("unable to identify namespace for workspace '%s' in project '%s'", wsName, cs.Project.Name)
 				}
 				cs.Workspace = workspace
 			}
 		} else {
 			// option 2: prompt requested for workspace name, this will fetch the workspace as a side-effect
-			if err := handlePrerequisites(reqWorkspace, reqOnboardingCluster, reqNamespaces); err != nil {
+			if err := handlePrerequisites(reqWorkspace, reqOnboardingCluster); err != nil {
 				return err
 			}
 			debug.Debug("Fetching accessible workspaces")
@@ -358,6 +372,11 @@ func satisfyWorkspaceRequirement(cmd *cobra.Command) func() error {
 			return fmt.Errorf("workspace '%s' does not have a namespace assigned", cs.Workspace.Name)
 		}
 
+		nsMod := "<unknown>"
+		if cs.Workspace.Status.Namespace != "" {
+			nsMod = cs.Workspace.Status.Namespace
+		}
+		debug.Debug("Workspace: %s (namespace: %s)", cs.Workspace.Name, nsMod)
 		return nil
 	}
 }
