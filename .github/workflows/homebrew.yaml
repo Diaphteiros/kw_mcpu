@@ -12,5 +12,7 @@ jobs:
       username: Diaphteiros
       tap: homebrew-kubeswitcher
       readme_table: true
+      test: |
+        assert_match(/^v\d/, shell_output("#{bin}/kw_mcpu version"))
     secrets:
       token: ${{ secrets.HOMEBREW_KUBESWITCHER_TOKEN }}
